@@ -1,0 +1,149 @@
+<?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+namespace local_rhssosync\local;
+
+/**
+ * Data access for the managed-user mapping table.
+ *
+ * A Moodle user is only ever considered "managed" when a row exists here with
+ * managed = 1. The plugin never infers management from the auth method.
+ *
+ * @package    local_rhssosync
+ * @copyright  2026 local_rhssosync contributors
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class mapping_repository {
+    /** @var string Table name. */
+    const TABLE = 'local_rhssosync_users';
+
+    /**
+     * Fetch a mapping by RHSSO user id.
+     *
+     * @param string $rhssouserid
+     * @return \stdClass|false
+     */
+    public function get_by_rhsso_id($rhssouserid) {
+        global $DB;
+        return $DB->get_record(self::TABLE, ['rhssouserid' => $rhssouserid]);
+    }
+
+    /**
+     * Fetch a mapping by Moodle user id.
+     *
+     * @param int $userid
+     * @return \stdClass|false
+     */
+    public function get_by_user_id($userid) {
+        global $DB;
+        return $DB->get_record(self::TABLE, ['userid' => (int) $userid]);
+    }
+
+    /**
+     * All managed mappings for a given group.
+     *
+     * @param string $groupid
+     * @return \stdClass[] Keyed by record id.
+     */
+    public function get_managed_for_group($groupid) {
+        global $DB;
+        return $DB->get_records(self::TABLE, ['groupid' => $groupid, 'managed' => 1]);
+    }
+
+    /**
+     * Count managed mappings for a group.
+     *
+     * @param string $groupid
+     * @return int
+     */
+    public function count_managed_for_group($groupid) {
+        global $DB;
+        return $DB->count_records(self::TABLE, ['groupid' => $groupid, 'managed' => 1]);
+    }
+
+    /**
+     * Whether a Moodle user is managed by this plugin.
+     *
+     * @param int $userid
+     * @return bool
+     */
+    public function is_managed($userid) {
+        global $DB;
+        return $DB->record_exists(self::TABLE, ['userid' => (int) $userid, 'managed' => 1]);
+    }
+
+    /**
+     * Create a new managed mapping.
+     *
+     * @param string $rhssouserid
+     * @param int $userid
+     * @param string $groupid
+     * @return int New record id.
+     */
+    public function create($rhssouserid, $userid, $groupid) {
+        global $DB;
+        $now = time();
+        $record = (object) [
+            'rhssouserid'       => $rhssouserid,
+            'userid'            => (int) $userid,
+            'groupid'           => $groupid,
+            'managed'           => 1,
+            'suspendedbyplugin' => 0,
+            'status'            => 'active',
+            'lastseen'          => $now,
+            'timecreated'       => $now,
+            'timemodified'      => $now,
+        ];
+        return $DB->insert_record(self::TABLE, $record);
+    }
+
+    /**
+     * Persist an existing mapping record.
+     *
+     * @param \stdClass $record
+     * @return void
+     */
+    public function update(\stdClass $record) {
+        global $DB;
+        $record->timemodified = time();
+        $DB->update_record(self::TABLE, $record);
+    }
+
+    /**
+     * Mark a mapping as seen during the current run.
+     *
+     * @param \stdClass $record
+     * @param string $groupid
+     * @return void
+     */
+    public function touch_seen(\stdClass $record, $groupid) {
+        $record->lastseen = time();
+        $record->groupid = $groupid;
+        $this->update($record);
+    }
+
+    /**
+     * All mappings (used by the managed-users report and privacy provider).
+     *
+     * @param int $limitfrom
+     * @param int $limitnum
+     * @return \stdClass[]
+     */
+    public function get_all($limitfrom = 0, $limitnum = 0) {
+        global $DB;
+        return $DB->get_records(self::TABLE, null, 'timemodified DESC', '*', $limitfrom, $limitnum);
+    }
+}

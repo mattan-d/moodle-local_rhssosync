@@ -1,0 +1,128 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template local_rhssosync/dashboard
+
+    Dashboard for the RHSSO synchronisation plugin.
+
+    Example context (json):
+    {
+        "sesskey": "abc123",
+        "actionurl": "/local/rhssosync/index.php",
+        "configured": true,
+        "groupselected": true,
+        "grouppath": "/ADUsers/Staff",
+        "managedcount": 42,
+        "conflictcount": 1,
+        "hasconflicts": true,
+        "urls": {
+            "preview": "#", "groupselection": "#", "connection": "#",
+            "syncsettings": "#", "managed": "#", "conflicts": "#", "history": "#"
+        },
+        "lastrun": {"exists": false}
+    }
+}}
+<div class="local-rhssosync-dashboard">
+
+    {{^configured}}
+        <div class="alert alert-warning" role="alert">{{#str}}dashnotconfigured, local_rhssosync{{/str}}</div>
+    {{/configured}}
+    {{#configured}}
+        {{^groupselected}}
+            <div class="alert alert-warning" role="alert">{{#str}}dashnogroup, local_rhssosync{{/str}}</div>
+        {{/groupselected}}
+    {{/configured}}
+
+    <div class="card-deck mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{#str}}dashstatus, local_rhssosync{{/str}}</h5>
+                <p class="card-text">
+                    {{#configured}}<span class="badge badge-success">{{#str}}configured, local_rhssosync{{/str}}</span>{{/configured}}
+                    {{^configured}}<span class="badge badge-danger">{{#str}}notconfigured, local_rhssosync{{/str}}</span>{{/configured}}
+                </p>
+                <p class="card-text">
+                    {{#str}}group, local_rhssosync{{/str}}:
+                    {{#groupselected}}<strong>{{grouppath}}</strong>{{/groupselected}}
+                    {{^groupselected}}<em>{{#str}}nogroupselected, local_rhssosync{{/str}}</em>{{/groupselected}}
+                </p>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{#str}}managedusers, local_rhssosync{{/str}}</h5>
+                <p class="display-4">{{managedcount}}</p>
+                <a href="{{urls.managed}}">{{#str}}viewmanagedusers, local_rhssosync{{/str}}</a>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{#str}}conflicts, local_rhssosync{{/str}}</h5>
+                <p class="display-4 {{#hasconflicts}}text-danger{{/hasconflicts}}">{{conflictcount}}</p>
+                <a href="{{urls.conflicts}}">{{#str}}viewconflicts, local_rhssosync{{/str}}</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="local-rhssosync-actions mb-4">
+        <form method="post" action="{{actionurl}}" class="d-inline-block mr-2">
+            <input type="hidden" name="sesskey" value="{{sesskey}}">
+            <input type="hidden" name="action" value="testconnection">
+            <button type="submit" class="btn btn-secondary" {{^configured}}disabled{{/configured}}>
+                {{#str}}testconnection, local_rhssosync{{/str}}
+            </button>
+        </form>
+        <a class="btn btn-secondary mr-2" href="{{urls.preview}}">{{#str}}previewsync, local_rhssosync{{/str}}</a>
+        <form method="post" action="{{actionurl}}" class="d-inline-block">
+            <input type="hidden" name="sesskey" value="{{sesskey}}">
+            <input type="hidden" name="action" value="syncnow">
+            <button type="submit" class="btn btn-primary" {{^groupselected}}disabled{{/groupselected}}>
+                {{#str}}syncnow, local_rhssosync{{/str}}
+            </button>
+        </form>
+    </div>
+
+    <h3>{{#str}}lastrun, local_rhssosync{{/str}}</h3>
+    {{#lastrun}}
+        {{#exists}}
+            <p>
+                <span class="badge {{statusbadge}}">{{status}}</span>
+                {{#dryrun}}<span class="badge badge-info">{{#str}}preview, local_rhssosync{{/str}}</span>{{/dryrun}}
+                {{#needsreview}}<span class="badge badge-warning">{{#str}}needsreview, local_rhssosync{{/str}}</span>{{/needsreview}}
+                <span class="text-muted">{{time}}</span>
+            </p>
+            {{#summary}}<p>{{summary}}</p>{{/summary}}
+            <table class="table table-sm w-auto">
+                <tbody>
+                    <tr><th>{{#str}}received, local_rhssosync{{/str}}</th><td>{{received}}</td></tr>
+                    <tr><th>{{#str}}created, local_rhssosync{{/str}}</th><td>{{created}}</td></tr>
+                    <tr><th>{{#str}}updated, local_rhssosync{{/str}}</th><td>{{updated}}</td></tr>
+                    <tr><th>{{#str}}suspended, local_rhssosync{{/str}}</th><td>{{suspended}}</td></tr>
+                    <tr><th>{{#str}}reactivated, local_rhssosync{{/str}}</th><td>{{reactivated}}</td></tr>
+                    <tr><th>{{#str}}skipped, local_rhssosync{{/str}}</th><td>{{skipped}}</td></tr>
+                    <tr><th>{{#str}}unchanged, local_rhssosync{{/str}}</th><td>{{unchanged}}</td></tr>
+                    <tr><th>{{#str}}conflicts, local_rhssosync{{/str}}</th><td>{{conflicts}}</td></tr>
+                    <tr><th>{{#str}}errors, local_rhssosync{{/str}}</th><td>{{errors}}</td></tr>
+                </tbody>
+            </table>
+            <a href="{{urls.history}}">{{#str}}viewhistory, local_rhssosync{{/str}}</a>
+        {{/exists}}
+        {{^exists}}
+            <p class="text-muted">{{#str}}noruns, local_rhssosync{{/str}}</p>
+        {{/exists}}
+    {{/lastrun}}
+</div>
