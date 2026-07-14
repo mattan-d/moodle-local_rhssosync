@@ -77,12 +77,12 @@ class dashboard implements renderable, templatable {
             'hasconflicts'   => $this->conflictcount > 0,
             'urls'           => [
                 'preview'        => (new moodle_url('/local/rhssosync/preview.php'))->out(false),
-                'groupselection' => self::section_url('local_rhssosync_groupselection'),
+                'groupselection' => (new moodle_url('/local/rhssosync/groupselection.php'))->out(false),
                 'connection'     => self::section_url('local_rhssosync_connection'),
                 'syncsettings'   => self::section_url('local_rhssosync_syncsettings'),
-                'managed'        => self::section_url('local_rhssosync_managed'),
-                'conflicts'      => self::section_url('local_rhssosync_conflicts'),
-                'history'        => self::section_url('local_rhssosync_history'),
+                'managed'        => (new moodle_url('/local/rhssosync/managed.php'))->out(false),
+                'conflicts'      => (new moodle_url('/local/rhssosync/conflicts.php'))->out(false),
+                'history'        => (new moodle_url('/local/rhssosync/history.php'))->out(false),
             ],
         ];
 

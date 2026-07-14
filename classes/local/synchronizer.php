@@ -217,7 +217,7 @@ class synchronizer {
         // username. Such users are never adopted or modified.
         $existing = $DB->get_record('user', [
             'username'   => $mapped->username,
-            'mnethostid' => $CFG->mnethostid,
+            'mnethostid' => $CFG->mnet_localhost_id,
             'deleted'    => 0,
         ]);
 
@@ -358,7 +358,7 @@ class synchronizer {
         $newuser->lastname = $mapped->lastname;
         $newuser->email = $mapped->email;
         $newuser->confirmed = 1;
-        $newuser->mnethostid = $CFG->mnethostid;
+        $newuser->mnethostid = $CFG->mnet_localhost_id;
         $newuser->lang = $CFG->lang ?? 'en';
         $newuser->timezone = '99';
 
