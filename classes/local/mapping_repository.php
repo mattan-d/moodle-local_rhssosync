@@ -64,6 +64,39 @@ class mapping_repository {
     }
 
     /**
+     * All managed mappings for any of the given groups.
+     *
+     * @param string[] $groupids
+     * @return \stdClass[] Keyed by record id.
+     */
+    public function get_managed_for_groups(array $groupids) {
+        global $DB;
+        $groupids = array_values(array_filter(array_map('strval', $groupids), static function($id) {
+            return $id !== '';
+        }));
+        if (empty($groupids)) {
+            return [];
+        }
+        if (count($groupids) === 1) {
+            return $this->get_managed_for_group($groupids[0]);
+        }
+        list($insql, $params) = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'g');
+        $params['managed'] = 1;
+        $sql = "SELECT * FROM {" . self::TABLE . "} WHERE managed = :managed AND groupid {$insql}";
+        return $DB->get_records_sql($sql, $params);
+    }
+
+    /**
+     * All managed mappings (any group).
+     *
+     * @return \stdClass[] Keyed by record id.
+     */
+    public function get_all_managed() {
+        global $DB;
+        return $DB->get_records(self::TABLE, ['managed' => 1]);
+    }
+
+    /**
      * Count managed mappings for a group.
      *
      * @param string $groupid

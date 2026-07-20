@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * RHSSO group selection page (autocomplete).
+ * RHSSO group selection page (multi-select autocomplete).
  *
  * @package    local_rhssosync
  * @copyright  2026 local_rhssosync contributors
@@ -38,11 +38,13 @@ $config = new config();
 $pageurl = new moodle_url('/local/rhssosync/groupselection.php');
 
 // Current selection for prefill.
-$current = null;
-if ($config->is_group_selected()) {
-    $current = (object) [
-        'id'   => $config->get_group_id(),
-        'path' => $config->get_group_path() !== '' ? $config->get_group_path() : $config->get_group_id(),
+$current = [];
+$ids = $config->get_group_ids();
+$paths = $config->get_group_paths();
+foreach ($ids as $i => $id) {
+    $current[] = (object) [
+        'id'   => $id,
+        'path' => $paths[$i] ?? $id,
     ];
 }
 
@@ -51,10 +53,16 @@ $form = new group_selection_form($pageurl->out(false), ['current' => $current]);
 if ($form->is_cancelled()) {
     redirect(new moodle_url('/local/rhssosync/index.php'));
 } else if ($data = $form->get_data()) {
-    $groupid = isset($data->groupid) ? (string) $data->groupid : '';
-    if ($groupid === '') {
-        // Clearing the selection.
-        $config->set_group('', '');
+    $rawids = $data->groupids ?? [];
+    if (!is_array($rawids)) {
+        $rawids = $rawids !== '' && $rawids !== null ? [(string) $rawids] : [];
+    }
+    $rawids = array_values(array_unique(array_filter(array_map('strval', $rawids), static function($id) {
+        return $id !== '';
+    })));
+
+    if (empty($rawids)) {
+        $config->set_groups([]);
         redirect(
             $pageurl,
             get_string('groupcleared', 'local_rhssosync'),
@@ -63,23 +71,42 @@ if ($form->is_cancelled()) {
         );
     }
 
-    // Resolve the canonical path server-side so the stored path is trustworthy.
-    $path = $groupid;
+    // Resolve canonical paths server-side so stored paths are trustworthy.
+    $groups = [];
+    $pathfail = false;
+    $client = null;
     try {
         $client = new rhsso_client($config);
-        $group = $client->get_group($groupid);
-        if ($group) {
-            $path = $group->path;
-        }
     } catch (\moodle_exception $e) {
-        // Fall back to whatever the form provided; surface a warning.
+        $pathfail = true;
+    }
+
+    foreach ($rawids as $groupid) {
+        $path = $groupid;
+        if ($client) {
+            try {
+                $group = $client->get_group($groupid);
+                if ($group) {
+                    $path = $group->path;
+                } else {
+                    $pathfail = true;
+                }
+            } catch (\moodle_exception $e) {
+                $pathfail = true;
+            }
+        }
+        $groups[$groupid] = $path;
+    }
+
+    if ($pathfail) {
         \core\notification::warning(get_string('grouppathresolvefail', 'local_rhssosync'));
     }
 
-    $config->set_group($groupid, $path);
+    $config->set_groups($groups);
+    $display = implode(', ', array_values($groups));
     redirect(
         $pageurl,
-        get_string('groupsaved', 'local_rhssosync', $path),
+        get_string('groupsaved', 'local_rhssosync', $display),
         null,
         \core\output\notification::NOTIFY_SUCCESS
     );

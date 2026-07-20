@@ -239,35 +239,117 @@ class config {
     }
 
     /**
-     * Selected RHSSO group id.
+     * Selected RHSSO group ids (one or more).
      *
-     * @return string Selected RHSSO group id.
+     * Reads the JSON list when present; falls back to the legacy single-group
+     * config keys so existing installations keep working.
+     *
+     * @return string[]
+     */
+    public function get_group_ids() {
+        $decoded = $this->decode_group_list($this->get('selectedgroupids', ''));
+        if (!empty($decoded)) {
+            return $decoded;
+        }
+        $legacy = (string) $this->get('selectedgroupid', '');
+        return $legacy !== '' ? [$legacy] : [];
+    }
+
+    /**
+     * Selected RHSSO group paths, parallel to {@see get_group_ids()}.
+     *
+     * @return string[]
+     */
+    public function get_group_paths() {
+        $ids = $this->get_group_ids();
+        if (empty($ids)) {
+            return [];
+        }
+        $paths = $this->decode_group_list($this->get('selectedgrouppaths', ''));
+        if (count($paths) === count($ids)) {
+            return $paths;
+        }
+        // Legacy single path, or mismatched lists: pad with ids.
+        $legacy = (string) $this->get('selectedgrouppath', '');
+        $result = [];
+        foreach ($ids as $i => $id) {
+            if (isset($paths[$i]) && $paths[$i] !== '') {
+                $result[] = $paths[$i];
+            } else if ($i === 0 && $legacy !== '') {
+                $result[] = $legacy;
+            } else {
+                $result[] = $id;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * First selected RHSSO group id (legacy helper).
+     *
+     * @return string
      */
     public function get_group_id() {
-        return (string) $this->get('selectedgroupid', '');
+        $ids = $this->get_group_ids();
+        return $ids[0] ?? '';
     }
 
     /**
-     * Selected RHSSO group path.
+     * Display string for selected group path(s).
      *
-     * @return string Selected RHSSO group path.
+     * @return string Comma-separated paths, or empty when none selected.
      */
     public function get_group_path() {
-        return (string) $this->get('selectedgrouppath', '');
+        return implode(', ', $this->get_group_paths());
     }
 
     /**
-     * Persist the selected group id and path.
+     * Persist one or more selected groups.
+     *
+     * @param array $groups Map of group id => path (path may equal id as fallback).
+     * @return void
+     */
+    public function set_groups(array $groups) {
+        $ids = [];
+        $paths = [];
+        foreach ($groups as $id => $path) {
+            $id = (string) $id;
+            if ($id === '') {
+                continue;
+            }
+            $ids[] = $id;
+            $paths[] = (string) ($path !== '' ? $path : $id);
+        }
+
+        $idsjson = json_encode(array_values($ids));
+        $pathsjson = json_encode(array_values($paths));
+        set_config('selectedgroupids', $idsjson, self::COMPONENT);
+        set_config('selectedgrouppaths', $pathsjson, self::COMPONENT);
+        $this->raw->selectedgroupids = $idsjson;
+        $this->raw->selectedgrouppaths = $pathsjson;
+
+        // Keep legacy scalars in sync (first group, or empty when cleared).
+        $firstid = $ids[0] ?? '';
+        $firstpath = $paths[0] ?? '';
+        set_config('selectedgroupid', $firstid, self::COMPONENT);
+        set_config('selectedgrouppath', $firstpath, self::COMPONENT);
+        $this->raw->selectedgroupid = $firstid;
+        $this->raw->selectedgrouppath = $firstpath;
+    }
+
+    /**
+     * Persist a single selected group id and path (legacy wrapper).
      *
      * @param string $groupid
      * @param string $grouppath
      * @return void
      */
     public function set_group($groupid, $grouppath) {
-        set_config('selectedgroupid', $groupid, self::COMPONENT);
-        set_config('selectedgrouppath', $grouppath, self::COMPONENT);
-        $this->raw->selectedgroupid = $groupid;
-        $this->raw->selectedgrouppath = $grouppath;
+        if ($groupid === '') {
+            $this->set_groups([]);
+            return;
+        }
+        $this->set_groups([(string) $groupid => (string) $grouppath]);
     }
 
     /**
@@ -283,11 +365,35 @@ class config {
     }
 
     /**
-     * Whether a group has been selected.
+     * Whether at least one group has been selected.
      *
      * @return bool
      */
     public function is_group_selected() {
-        return $this->get_group_id() !== '';
+        return !empty($this->get_group_ids());
+    }
+
+    /**
+     * Decode a JSON list of group ids or paths from config.
+     *
+     * @param string $raw
+     * @return string[]
+     */
+    protected function decode_group_list($raw) {
+        if ($raw === '' || $raw === null) {
+            return [];
+        }
+        $decoded = json_decode((string) $raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $result = [];
+        foreach ($decoded as $value) {
+            $value = (string) $value;
+            if ($value !== '') {
+                $result[] = $value;
+            }
+        }
+        return $result;
     }
 }

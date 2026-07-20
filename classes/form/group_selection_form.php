@@ -22,7 +22,7 @@ global $CFG;
 require_once($CFG->libdir . '/formslib.php');
 
 /**
- * Group selection form with RHSSO autocomplete.
+ * Group selection form with RHSSO autocomplete (multi-select).
  *
  * @package    local_rhssosync
  * @copyright  2026 local_rhssosync contributors
@@ -37,28 +37,37 @@ class group_selection_form extends \moodleform {
     protected function definition() {
         $mform = $this->_form;
 
-        $current = $this->_customdata['current'] ?? null;
-
-        // Pre-populate the option list with the currently selected group so the
-        // label is rendered before any AJAX search happens.
-        $options = [];
-        if ($current && !empty($current->id)) {
-            $options[$current->id] = $current->path;
+        /** @var object[] $current List of {id, path} for currently selected groups. */
+        $current = $this->_customdata['current'] ?? [];
+        if (!is_array($current)) {
+            $current = $current ? [$current] : [];
         }
 
-        $mform->addElement('autocomplete', 'groupid', get_string('group', 'local_rhssosync'), $options, [
+        // Pre-populate the option list with currently selected groups so labels
+        // are rendered before any AJAX search happens.
+        $options = [];
+        $defaults = [];
+        foreach ($current as $group) {
+            if (empty($group->id)) {
+                continue;
+            }
+            $options[$group->id] = $group->path !== '' ? $group->path : $group->id;
+            $defaults[] = $group->id;
+        }
+
+        $mform->addElement('autocomplete', 'groupids', get_string('groups', 'local_rhssosync'), $options, [
             'ajax'              => 'local_rhssosync/groupselector',
-            'multiple'          => false,
+            'multiple'          => true,
             'casesensitive'     => false,
             'noselectionstring' => get_string('nogroupselected', 'local_rhssosync'),
             'placeholder'       => get_string('grouptypetosearch', 'local_rhssosync'),
         ]);
-        $mform->addHelpButton('groupid', 'group', 'local_rhssosync');
+        $mform->addHelpButton('groupids', 'groups', 'local_rhssosync');
 
-        if ($current && !empty($current->id)) {
-            $mform->setDefault('groupid', $current->id);
+        if (!empty($defaults)) {
+            $mform->setDefault('groupids', $defaults);
         }
 
-        $this->add_action_buttons(true, get_string('savegroup', 'local_rhssosync'));
+        $this->add_action_buttons(true, get_string('savegroups', 'local_rhssosync'));
     }
 }

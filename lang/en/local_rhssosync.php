@@ -91,21 +91,24 @@ $string['logretentiondays_desc'] = 'Number of days to keep synchronisation run r
 
 // Group selection.
 $string['group'] = 'RHSSO group';
+$string['groups'] = 'RHSSO groups';
+$string['groups_help'] = 'Start typing at least two characters to search RHSSO groups. You can select one or more groups. Only the direct members of the selected groups are synchronised; subgroups are not processed. A user who belongs to more than one selected group is synchronised once.';
 $string['group_help'] = 'Start typing at least two characters to search RHSSO groups. Only the direct members of the selected group are synchronised; subgroups are not processed.';
-$string['groupselection_help'] = 'Select the RHSSO group whose direct members will be synchronised into Moodle. Searching queries RHSSO live through a secure server-side call.';
+$string['groupselection_help'] = 'Select one or more RHSSO groups whose direct members will be synchronised into Moodle. Searching queries RHSSO live through a secure server-side call.';
 $string['grouptypetosearch'] = 'Type to search RHSSO groups...';
 $string['nogroupselected'] = 'No group selected';
 $string['savegroup'] = 'Save group';
-$string['groupsaved'] = 'RHSSO group saved: {$a}';
+$string['savegroups'] = 'Save groups';
+$string['groupsaved'] = 'RHSSO group selection saved: {$a}';
 $string['groupcleared'] = 'RHSSO group selection cleared.';
-$string['grouppathresolvefail'] = 'The group was saved but its full path could not be confirmed against RHSSO.';
+$string['grouppathresolvefail'] = 'The group selection was saved but one or more full paths could not be confirmed against RHSSO.';
 
 // Dashboard.
 $string['dashstatus'] = 'Status';
 $string['configured'] = 'Configured';
 $string['notconfigured'] = 'Not configured';
 $string['dashnotconfigured'] = 'The RHSSO connection is not configured yet. Complete the connection settings first.';
-$string['dashnogroup'] = 'No RHSSO group is selected yet. Choose a group before synchronising.';
+$string['dashnogroup'] = 'No RHSSO group is selected yet. Choose at least one group before synchronising.';
 $string['testconnection'] = 'Test connection';
 $string['previewsync'] = 'Preview sync';
 $string['syncnow'] = 'Sync now';

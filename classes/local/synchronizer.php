@@ -21,7 +21,7 @@ use local_rhssosync\client\rhsso_client;
 /**
  * Core synchronisation engine.
  *
- * Pulls the direct members of the configured RHSSO group and reconciles them
+ * Pulls the direct members of the configured RHSSO group(s) and reconciles them
  * with Moodle users, creating and updating managed accounts, recording
  * conflicts for unmanaged collisions, and suspending or reactivating managed
  * users under strict safety rules.
@@ -116,13 +116,27 @@ class synchronizer {
                 }
             }
 
-            $groupid = $this->config->get_group_id();
+            $groupids = $this->config->get_group_ids();
 
-            // Retrieve the complete, fully paginated member list. Any failure
-            // throws, which means the list is NOT trusted and no suspensions
-            // may be performed.
+            // Retrieve complete, fully paginated member lists for every selected
+            // group. Any failure throws, which means the union is NOT trusted
+            // and no suspensions may be performed.
+            $membersbyid = [];
+            $incomplete = [];
             try {
-                $members = $this->client->get_group_members($groupid);
+                foreach ($groupids as $groupid) {
+                    $members = $this->client->get_group_members($groupid);
+                    foreach ($members as $member) {
+                        $memberid = !empty($member['id']) ? (string) $member['id'] : '';
+                        if ($memberid === '') {
+                            $incomplete[] = ['member' => $member, 'groupid' => $groupid];
+                            continue;
+                        }
+                        if (!isset($membersbyid[$memberid])) {
+                            $membersbyid[$memberid] = ['member' => $member, 'groupid' => $groupid];
+                        }
+                    }
+                }
             } catch (\moodle_exception $e) {
                 $result->status = sync_result::STATUS_FAILED;
                 $result->summary = get_string('errorretrieval', 'local_rhssosync', $e->getMessage());
@@ -130,19 +144,21 @@ class synchronizer {
                 return $this->finish($result);
             }
 
-            $result->received = count($members);
+            $result->received = count($membersbyid) + count($incomplete);
 
-            // Process the present members.
+            // Process the present members (deduped across selected groups).
             $seen = [];
-            foreach ($members as $member) {
-                if (!empty($member['id'])) {
-                    $seen[(string) $member['id']] = true;
-                }
-                $this->process_member($member, $groupid, $result, $dryrun);
+            foreach ($membersbyid as $memberid => $entry) {
+                $seen[$memberid] = true;
+                $this->process_member($entry['member'], $entry['groupid'], $result, $dryrun);
+            }
+            foreach ($incomplete as $entry) {
+                $this->process_member($entry['member'], $entry['groupid'], $result, $dryrun);
             }
 
-            // Suspension pass: the list is complete and trusted here.
-            $this->process_suspensions($groupid, $seen, $result, $dryrun);
+            // Suspension pass: the union list is complete and trusted here.
+            // Any managed user not present in any selected group is a candidate.
+            $this->process_suspensions($seen, $result, $dryrun);
 
             $result->status = $result->count(sync_result::ACTION_ERROR) > 0
                 ? sync_result::STATUS_PARTIAL
@@ -403,17 +419,18 @@ class synchronizer {
     }
 
     /**
-     * Suspend managed users no longer present in the group, subject to the
-     * maximum suspension threshold.
+     * Suspend managed users no longer present in any selected group, subject
+     * to the maximum suspension threshold.
      *
-     * @param string $groupid
-     * @param array $seen Map of present RHSSO user ids => true.
+     * @param array $seen Map of present RHSSO user ids => true (union of groups).
      * @param sync_result $result
      * @param bool $dryrun
      * @return void
      */
-    protected function process_suspensions($groupid, array $seen, sync_result $result, $dryrun) {
-        $managed = $this->mappings->get_managed_for_group($groupid);
+    protected function process_suspensions(array $seen, sync_result $result, $dryrun) {
+        // All managed users: membership is defined by the union of selected
+        // groups, so users from a deselected group are also candidates.
+        $managed = $this->mappings->get_all_managed();
         $totalmanaged = count($managed);
 
         // Candidates: active managed users not present in the trusted list.
