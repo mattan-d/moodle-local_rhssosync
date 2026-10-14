@@ -32,8 +32,17 @@ class config {
     /** @var string Plugin frankenstyle component / config plugin name. */
     const COMPONENT = 'local_rhssosync';
 
+    /** @var string Table storing selected RHSSO groups. */
+    const GROUPS_TABLE = 'local_rhssosync_groups';
+
     /** @var \stdClass|null Cached config object. */
     protected $raw;
+
+    /** @var bool True when constructed with an override (unit tests). */
+    protected $overridden = false;
+
+    /** @var array|null Cached selected groups as list of ['id' => ..., 'path' => ...]. */
+    protected $groupscache = null;
 
     /**
      * Constructor.
@@ -43,6 +52,7 @@ class config {
     public function __construct($override = null) {
         if ($override !== null) {
             $this->raw = (object) $override;
+            $this->overridden = true;
         } else {
             $this->raw = get_config(self::COMPONENT);
         }
@@ -241,18 +251,10 @@ class config {
     /**
      * Selected RHSSO group ids (one or more).
      *
-     * Reads the JSON list when present; falls back to the legacy single-group
-     * config keys so existing installations keep working.
-     *
      * @return string[]
      */
     public function get_group_ids() {
-        $decoded = $this->decode_group_list($this->get('selectedgroupids', ''));
-        if (!empty($decoded)) {
-            return $decoded;
-        }
-        $legacy = (string) $this->get('selectedgroupid', '');
-        return $legacy !== '' ? [$legacy] : [];
+        return array_column($this->load_selected_groups(), 'id');
     }
 
     /**
@@ -261,27 +263,7 @@ class config {
      * @return string[]
      */
     public function get_group_paths() {
-        $ids = $this->get_group_ids();
-        if (empty($ids)) {
-            return [];
-        }
-        $paths = $this->decode_group_list($this->get('selectedgrouppaths', ''));
-        if (count($paths) === count($ids)) {
-            return $paths;
-        }
-        // Legacy single path, or mismatched lists: pad with ids.
-        $legacy = (string) $this->get('selectedgrouppath', '');
-        $result = [];
-        foreach ($ids as $i => $id) {
-            if (isset($paths[$i]) && $paths[$i] !== '') {
-                $result[] = $paths[$i];
-            } else if ($i === 0 && $legacy !== '') {
-                $result[] = $legacy;
-            } else {
-                $result[] = $id;
-            }
-        }
-        return $result;
+        return array_column($this->load_selected_groups(), 'path');
     }
 
     /**
@@ -304,37 +286,52 @@ class config {
     }
 
     /**
-     * Persist one or more selected groups.
+     * Persist one or more selected groups into the dedicated plugin table.
+     *
+     * Stored outside config_plugins to avoid PostgreSQL sequence issues when
+     * inserting new config keys, and because multi-group selection is tabular.
      *
      * @param array $groups Map of group id => path (path may equal id as fallback).
      * @return void
      */
     public function set_groups(array $groups) {
-        $ids = [];
-        $paths = [];
+        global $DB;
+
+        $normalised = [];
         foreach ($groups as $id => $path) {
             $id = (string) $id;
             if ($id === '') {
                 continue;
             }
-            $ids[] = $id;
-            $paths[] = (string) ($path !== '' ? $path : $id);
+            $normalised[] = [
+                'id'   => $id,
+                'path' => (string) ($path !== '' ? $path : $id),
+            ];
         }
 
-        $idsjson = json_encode(array_values($ids));
-        $pathsjson = json_encode(array_values($paths));
-        set_config('selectedgroupids', $idsjson, self::COMPONENT);
-        set_config('selectedgrouppaths', $pathsjson, self::COMPONENT);
-        $this->raw->selectedgroupids = $idsjson;
-        $this->raw->selectedgrouppaths = $pathsjson;
+        if ($this->overridden) {
+            // Unit-test override path: keep values on the in-memory object only.
+            $this->raw->selectedgroupid = $normalised[0]['id'] ?? '';
+            $this->raw->selectedgrouppath = $normalised[0]['path'] ?? '';
+            $this->groupscache = $normalised;
+            return;
+        }
 
-        // Keep legacy scalars in sync (first group, or empty when cleared).
-        $firstid = $ids[0] ?? '';
-        $firstpath = $paths[0] ?? '';
-        set_config('selectedgroupid', $firstid, self::COMPONENT);
-        set_config('selectedgrouppath', $firstpath, self::COMPONENT);
-        $this->raw->selectedgroupid = $firstid;
-        $this->raw->selectedgrouppath = $firstpath;
+        $transaction = $DB->start_delegated_transaction();
+        $DB->delete_records(self::GROUPS_TABLE);
+        $now = time();
+        foreach ($normalised as $i => $group) {
+            $DB->insert_record(self::GROUPS_TABLE, (object) [
+                'groupid'      => $group['id'],
+                'grouppath'    => $group['path'],
+                'sortorder'    => $i,
+                'timecreated'  => $now,
+                'timemodified' => $now,
+            ]);
+        }
+        $transaction->allow_commit();
+
+        $this->groupscache = $normalised;
     }
 
     /**
@@ -371,6 +368,68 @@ class config {
      */
     public function is_group_selected() {
         return !empty($this->get_group_ids());
+    }
+
+    /**
+     * Load selected groups from the plugin table (with legacy config fallback).
+     *
+     * @return array[] List of ['id' => string, 'path' => string].
+     */
+    protected function load_selected_groups() {
+        global $DB;
+
+        if ($this->groupscache !== null) {
+            return $this->groupscache;
+        }
+
+        if ($this->overridden) {
+            $this->groupscache = $this->legacy_groups_from_raw();
+            return $this->groupscache;
+        }
+
+        if ($DB->get_manager()->table_exists(self::GROUPS_TABLE)) {
+            $records = $DB->get_records(self::GROUPS_TABLE, null, 'sortorder ASC, id ASC');
+            if (!empty($records)) {
+                $groups = [];
+                foreach ($records as $record) {
+                    $groups[] = [
+                        'id'   => (string) $record->groupid,
+                        'path' => (string) ($record->grouppath !== '' ? $record->grouppath : $record->groupid),
+                    ];
+                }
+                $this->groupscache = $groups;
+                return $this->groupscache;
+            }
+        }
+
+        // Fallback for tests / pre-upgrade installs still using config keys.
+        $this->groupscache = $this->legacy_groups_from_raw();
+        return $this->groupscache;
+    }
+
+    /**
+     * Read group selection from legacy config_plugins keys on $this->raw.
+     *
+     * @return array[]
+     */
+    protected function legacy_groups_from_raw() {
+        $ids = $this->decode_group_list($this->get('selectedgroupids', ''));
+        $paths = $this->decode_group_list($this->get('selectedgrouppaths', ''));
+        if (empty($ids)) {
+            $legacy = (string) $this->get('selectedgroupid', '');
+            if ($legacy === '') {
+                return [];
+            }
+            $ids = [$legacy];
+            $paths = [(string) $this->get('selectedgrouppath', $legacy)];
+        }
+
+        $groups = [];
+        foreach ($ids as $i => $id) {
+            $path = isset($paths[$i]) && $paths[$i] !== '' ? $paths[$i] : $id;
+            $groups[] = ['id' => $id, 'path' => $path];
+        }
+        return $groups;
     }
 
     /**

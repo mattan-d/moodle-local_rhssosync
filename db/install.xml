@@ -1,9 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/rhssosync/db" VERSION="20260617" COMMENT="Database schema for local_rhssosync."
+<XMLDB PATH="local/rhssosync/db" VERSION="20261014" COMMENT="Database schema for local_rhssosync."
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
   <TABLES>
+    <TABLE NAME="local_rhssosync_groups" COMMENT="RHSSO groups selected for synchronisation.">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="groupid" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="RHSSO group UUID."/>
+        <FIELD NAME="grouppath" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Display path of the RHSSO group."/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="groupid" UNIQUE="true" FIELDS="groupid"/>
+        <INDEX NAME="sortorder" UNIQUE="false" FIELDS="sortorder"/>
+      </INDEXES>
+    </TABLE>
     <TABLE NAME="local_rhssosync_users" COMMENT="Mapping between RHSSO users and Moodle users managed by this plugin.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>

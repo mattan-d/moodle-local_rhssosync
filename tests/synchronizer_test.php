@@ -45,8 +45,22 @@ final class synchronizer_test extends \advanced_testcase {
         set_config('realm', 'ADUsers', 'local_rhssosync');
         set_config('clientid', 'moodle-sync', 'local_rhssosync');
         set_config('clientsecret', 'secret', 'local_rhssosync');
-        set_config('selectedgroupid', 'group-1', 'local_rhssosync');
-        set_config('selectedgrouppath', '/ADUsers/Staff', 'local_rhssosync');
+        // Prefer the dedicated groups table when available (post-1.1.1).
+        global $DB;
+        if ($DB->get_manager()->table_exists('local_rhssosync_groups')) {
+            $DB->delete_records('local_rhssosync_groups');
+            $now = time();
+            $DB->insert_record('local_rhssosync_groups', (object) [
+                'groupid'      => 'group-1',
+                'grouppath'    => '/ADUsers/Staff',
+                'sortorder'    => 0,
+                'timecreated'  => $now,
+                'timemodified' => $now,
+            ]);
+        } else {
+            set_config('selectedgroupid', 'group-1', 'local_rhssosync');
+            set_config('selectedgrouppath', '/ADUsers/Staff', 'local_rhssosync');
+        }
         set_config('usernamesource', 'username', 'local_rhssosync');
         set_config('updateexisting', 1, 'local_rhssosync');
         set_config('updateemail', 1, 'local_rhssosync');
