@@ -34,15 +34,19 @@ require_capability('local/rhssosync:viewreports', $context);
 $page = optional_param('page', 0, PARAM_INT);
 $perpage = 50;
 
+$mappings = new \local_rhssosync\local\mapping_repository();
+$mappings->purge_stale();
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managedusers', 'local_rhssosync'));
 
-$total = $DB->count_records('local_rhssosync_users');
+$total = $mappings->count_live_managed();
 
 $sql = "SELECT m.id, m.rhssouserid, m.groupid, m.managed, m.suspendedbyplugin, m.status,
-               m.lastseen, m.timemodified, u.username, u.firstname, u.lastname, u.email, u.suspended, u.deleted
+               m.lastseen, m.timemodified, u.username, u.firstname, u.lastname, u.email, u.suspended
           FROM {local_rhssosync_users} m
-          JOIN {user} u ON u.id = m.userid
+          JOIN {user} u ON u.id = m.userid AND u.deleted = 0
+         WHERE m.managed = 1
       ORDER BY m.timemodified DESC";
 $records = $DB->get_records_sql($sql, [], $page * $perpage, $perpage);
 

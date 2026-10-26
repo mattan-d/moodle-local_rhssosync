@@ -76,7 +76,9 @@ if ($action !== '' && confirm_sesskey() && data_submitted()) {
 $reports = new report_repository();
 $mappings = new mapping_repository();
 $lastrun = $reports->get_last_run();
-$managedcount = $DB->count_records(mapping_repository::TABLE, ['managed' => 1]);
+// Drop mappings for Moodle users that were deleted, then count only live ones.
+$mappings->purge_stale();
+$managedcount = $mappings->count_live_managed();
 $conflictcount = $reports->count_open_conflicts();
 
 /** @var \local_rhssosync\output\renderer $output */

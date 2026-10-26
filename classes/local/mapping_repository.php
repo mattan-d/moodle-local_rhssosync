@@ -97,6 +97,53 @@ class mapping_repository {
     }
 
     /**
+     * Count managed mappings whose Moodle user still exists and is not deleted.
+     *
+     * @return int
+     */
+    public function count_live_managed() {
+        global $DB;
+        $sql = "SELECT COUNT(1)
+                  FROM {" . self::TABLE . "} m
+                  JOIN {user} u ON u.id = m.userid AND u.deleted = 0
+                 WHERE m.managed = 1";
+        return (int) $DB->count_records_sql($sql);
+    }
+
+    /**
+     * Remove mappings that no longer point at a live Moodle user.
+     *
+     * Moodle keeps deleted accounts (deleted = 1) and the mapping row would
+     * otherwise keep counting them as managed.
+     *
+     * @return int Number of mappings removed.
+     */
+    public function purge_stale() {
+        global $DB;
+        $sql = "SELECT m.id
+                  FROM {" . self::TABLE . "} m
+             LEFT JOIN {user} u ON u.id = m.userid AND u.deleted = 0
+                 WHERE u.id IS NULL";
+        $ids = $DB->get_fieldset_sql($sql);
+        if (empty($ids)) {
+            return 0;
+        }
+        $DB->delete_records_list(self::TABLE, 'id', $ids);
+        return count($ids);
+    }
+
+    /**
+     * Delete a mapping by its record id.
+     *
+     * @param int $id
+     * @return void
+     */
+    public function delete($id) {
+        global $DB;
+        $DB->delete_records(self::TABLE, ['id' => (int) $id]);
+    }
+
+    /**
      * Count managed mappings for a group.
      *
      * @param string $groupid

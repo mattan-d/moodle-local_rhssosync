@@ -116,6 +116,13 @@ class synchronizer {
                 }
             }
 
+            // Forget mappings whose Moodle user was deleted, so the run
+            // reconciles against accounts that actually exist. A member who is
+            // still in a selected group is created again below.
+            if (!$dryrun) {
+                $this->mappings->purge_stale();
+            }
+
             $groupids = $this->config->get_group_ids();
 
             // Retrieve complete, fully paginated member lists for every selected
@@ -223,6 +230,18 @@ class synchronizer {
         }
 
         $mapping = $this->mappings->get_by_rhsso_id($mapped->rhssouserid);
+
+        if ($mapping) {
+            $liveuser = $DB->get_record('user', ['id' => $mapping->userid, 'deleted' => 0]);
+            if (!$liveuser) {
+                // Stale mapping: the Moodle account is gone. Drop it and treat
+                // the member as new so a still-selected user is recreated.
+                if (!$dryrun) {
+                    $this->mappings->delete($mapping->id);
+                }
+                $mapping = false;
+            }
+        }
 
         if ($mapping) {
             $this->process_existing_mapping($mapping, $mapped, $groupid, $result, $dryrun);
