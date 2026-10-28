@@ -27,10 +27,10 @@ defined('MOODLE_INTERNAL') || die();
 $tasks = [
     [
         'classname' => 'local_rhssosync\task\scheduled_sync_task',
-        // Default: every 12 hours (at minute 0, hours 0 and 12).
+        // Default: every 4 hours (at minute 0, hours 0 and 4).
         'blocking'  => 0,
         'minute'    => '0',
-        'hour'      => '*/12',
+        'hour'      => '*/4',
         'day'       => '*',
         'month'     => '*',
         'dayofweek' => '*',

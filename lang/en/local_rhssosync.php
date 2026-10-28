@@ -125,6 +125,7 @@ $string['backtohistory'] = 'Back to history';
 $string['testconnectionok'] = 'Connection to RHSSO succeeded.';
 $string['testconnectionadminfail'] = 'Authenticated, but the Admin REST API call failed ({$a}). Check the service account permissions.';
 $string['syncqueued'] = 'Synchronisation has been queued and will run on the next cron cycle.';
+$string['syncerrorsuffix'] = 'Errors: {$a->errors}. {$a->detail}';
 $string['previewintro'] = 'A preview performs a full dry run: it contacts RHSSO and computes the changes that would be made, without modifying any user.';
 $string['runpreview'] = 'Run preview';
 $string['previewnotready'] = 'Configure the connection and select a group before running a preview.';

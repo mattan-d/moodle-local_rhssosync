@@ -178,6 +178,19 @@ class synchronizer {
                 'reactivated' => $result->count(sync_result::ACTION_REACTIVATE),
                 'conflicts'   => $result->count(sync_result::ACTION_CONFLICT),
             ]);
+            if ($result->count(sync_result::ACTION_ERROR) > 0) {
+                $detail = '';
+                foreach ($result->get_logs() as $log) {
+                    if ($log->action === sync_result::ACTION_ERROR && $log->detail !== '') {
+                        $detail = $log->detail;
+                        break;
+                    }
+                }
+                $result->summary .= ' ' . get_string('syncerrorsuffix', 'local_rhssosync', (object) [
+                    'errors' => $result->count(sync_result::ACTION_ERROR),
+                    'detail' => $detail,
+                ]);
+            }
 
             return $this->finish($result);
         } finally {
@@ -396,13 +409,25 @@ class synchronizer {
         $newuser->mnethostid = $CFG->mnet_localhost_id;
         $newuser->lang = $CFG->lang ?? 'en';
         $newuser->timezone = '99';
+        // PostgreSQL rejects omitted NOT NULL columns. Match auth_oauth2 and
+        // fill the char columns that have no database default.
+        $newuser->password = AUTH_PASSWORD_NOT_CACHED;
+        $newuser->secret = random_string(15);
+        $newuser->idnumber = '';
+        $newuser->phone1 = '';
+        $newuser->phone2 = '';
+        $newuser->institution = '';
+        $newuser->department = '';
+        $newuser->address = '';
+        $newuser->theme = '';
+        $newuser->lastip = '';
 
         try {
             // Never create or manage a local password for these accounts.
             $userid = user_create_user($newuser, false, true);
             $this->mappings->create($mapped->rhssouserid, $userid, $groupid);
             $result->record(sync_result::ACTION_CREATE, $mapped->username, (int) $userid, $mapped->rhssouserid);
-        } catch (\moodle_exception $e) {
+        } catch (\Throwable $e) {
             $result->record(
                 sync_result::ACTION_ERROR,
                 $mapped->username,

@@ -29,6 +29,8 @@ use local_rhssosync\client\rhsso_client;
 use local_rhssosync\local\config;
 use local_rhssosync\local\mapping_repository;
 use local_rhssosync\local\report_repository;
+use local_rhssosync\local\sync_result;
+use local_rhssosync\local\synchronizer;
 
 admin_externalpage_setup('local_rhssosync_dashboard');
 
@@ -60,16 +62,19 @@ if ($action !== '' && confirm_sesskey() && data_submitted()) {
                 \core\output\notification::NOTIFY_ERROR
             );
         }
-        $task = new \local_rhssosync\task\adhoc_sync_task();
-        $task->set_custom_data(['userid' => $USER->id]);
-        $task->set_component('local_rhssosync');
-        \core\task\manager::queue_adhoc_task($task, true);
-        redirect(
-            $baseurl,
-            get_string('syncqueued', 'local_rhssosync'),
-            null,
-            \core\output\notification::NOTIFY_SUCCESS
-        );
+        // Run in this request. Queueing for cron left the preview list
+        // uncreated whenever ad-hoc tasks were not processed.
+        \core_php_time_limit::raise(0);
+        raise_memory_limit(MEMORY_EXTRA);
+        $result = synchronizer::instance()->run('adhoc', false, (int) $USER->id);
+
+        $notify = \core\output\notification::NOTIFY_SUCCESS;
+        if ($result->status === sync_result::STATUS_FAILED || $result->status === sync_result::STATUS_ABORTED) {
+            $notify = \core\output\notification::NOTIFY_ERROR;
+        } else if ($result->status === sync_result::STATUS_PARTIAL || $result->needsreview) {
+            $notify = \core\output\notification::NOTIFY_WARNING;
+        }
+        redirect($baseurl, $result->summary, null, $notify);
     }
 }
 
